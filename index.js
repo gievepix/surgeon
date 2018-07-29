@@ -46,7 +46,7 @@ module.exports = function Surgeon(dispatch) {
 	}
 
 	// ############# //
-	// ### Magic ### //
+	// ### Hooks ### //
 	// ############# //
 
 	dispatch.hook('S_LOGIN', 10, { order: 999 }, event => {
@@ -66,18 +66,20 @@ module.exports = function Surgeon(dispatch) {
 			shape: event.shape
 		});
 		Object.assign(userinfo.fake, userinfo.real);
-		if (customApp.monsters[userinfo.real.name]) {
-			let mon = customApp.monsters[userinfo.real.name]
+		if (customApp.characters[game.me.name]) command.message('Using preset '+customApp.characters[game.me.name]);
+		if (customApp.monsters[game.me.name]) {
+			let mon = customApp.monsters[game.me.name]
 			event.templateId = fixModel(mon.race, userinfo.real.race, mon.gender, userinfo.real.class);
+			command.message('Monster mode enabled. (race '+mon.race+' gender '+mon.gender+')');
 			return true;
-		};
-	})
+		}
+	});
 	
 	dispatch.hook('S_SPAWN_ME', 3, event => {
 		if (game.me.is(event.gameId) && customApp.characters[game.me.name]) {
 			EmulateExternalChange();
 		}
- 	})
+ 	});
 
 	dispatch.hook('S_USER_EXTERNAL_CHANGE', 6, { order: 999, filter: { fake: null }}, (event) => {
 		if (game.me.is(event.gameId)) {
@@ -98,7 +100,7 @@ module.exports = function Surgeon(dispatch) {
 			EmulateExternalChange();
 			return false
 		}
- 	})
+ 	});
 
 	dispatch.hook('S_GET_USER_LIST', 14, { order: -1 }, (event) => {
         for (let indexx in event.characters) {
@@ -115,7 +117,7 @@ module.exports = function Surgeon(dispatch) {
 			}
 		}
 		return true
-    })
+    });
 
 	dispatch.hook('C_CANCEL_CHANGE_USER_APPEARANCE', 1, event => {
 		if (inSurgeonRoom) {
@@ -159,9 +161,9 @@ module.exports = function Surgeon(dispatch) {
 		}
 	});
 
-	// ######################## //
-	// ### Helper Functions ### //
-	// ######################## //
+	// ################# //
+	// ### Functions ### //
+	// ################# //
 
 	function SurgeonRoom(room, itemid) {
 		if (room == 2 && (userinfo.fake.race == 4 || userinfo.fake.race == 5)) {
@@ -286,8 +288,8 @@ module.exports = function Surgeon(dispatch) {
 			}
 			Object.assign(e, userinfo.costumes)
 			Object.assign(userinfo.fake, {
-				race: Math.floor((fix - 10101) / 200),
-				gender: Math.floor((fix - 10101) / 100) % 2,
+				race: currpreset.race,
+				gender: currpreset.gender,
 				class: (fix - 10101) % 100,
 				appearance: currpreset.appearance,
 				details: Buffer.from(currpreset.details, 'hex')
@@ -320,9 +322,9 @@ module.exports = function Surgeon(dispatch) {
 		} 
 	}
 
-	// ################# //
-	// ### Chat Hook ### //
-	// ################# //
+	// ################ //
+	// ### Commands ### //
+	// ################ //
 
 	command.add('surgeon', (param, num1, num2) => {
 		switch (param) {
@@ -330,13 +332,13 @@ module.exports = function Surgeon(dispatch) {
 			let presetId = (num1 == null ? 0 : parseInt(num1, 10));
 			if(presetId >= 1){
 				if (presetId > customApp.presets.length) {
-					command.message('[Surgeon] Invalid Preset. Does not exist.');
+					command.message('Invalid Preset. Does not exist.');
 					break;
 				}
 				customApp.characters[game.me.name] = presetId;
 				EmulateExternalChange();
 				saveCustom();
-				command.message('[Surgeon] Using preset '+presetId);
+				command.message('Using preset '+presetId);
 			} else {
 				customApp.characters[game.me.name] = 0;
 				ChangeAppearance(customApp.characters[game.me.name] - 1, marrow);
@@ -357,40 +359,39 @@ module.exports = function Surgeon(dispatch) {
 			}
 			break;
 		case 'monster': 
-				if (num1 == 'off') {
-					customApp.monsters[game.me.name] = false
-					ChangeAppearance(customApp.characters[game.me.name] - 1, marrow);
-					saveCustom();
-					command.message('Monster mode disabled. Please relog to revert to the real templateId.')
-					break
-				}
+			switch (num1) {
+			case 'off': 
+				customApp.monsters[game.me.name] = false
+				ChangeAppearance(customApp.characters[game.me.name] - 1, marrow);
+				saveCustom();
+				command.message('Monster mode disabled. Please relog to revert to the real templateId.')
+				break;
+			default:
 				let raceId = (num1 == null ? 0 : Math.min(Math.max(parseInt(num1, 10), 0), 5))
 				let genderId = (num2 == null ? 0 : Math.min(Math.max(parseInt(num2, 10), 0), 1))
-				customApp.monsters[game.me.name] = { 
-					race: raceId,
-					gender: genderId
-				}
-				EmulateExternalChange();
+				customApp.monsters[game.me.name] = {  race: raceId, gender: genderId }
+				EmulateExternalChange()
 				saveCustom();
 				command.message('Monster mode enabled. (race '+raceId+' gender '+genderId+') Please relog to '
-				+' apply the race and gender to the templateId.')
-				break
+				+' apply the race and gender to the templateId.');
+			}
+			break;
 		default:
 			command.message('Commands:');
-			command.message('"surgeon load [x]" - load your saved preset slot x, 0 - revert to original.');
-			command.message('"surgeon race" - Emulates a race change. <font color="#fc7676">[1]</font>');
-			command.message('"surgeon gender" - Emulates a gender change. <font color="#fc7676">[1]</font>');
-			command.message('"surgeon face" - Emulates an appearance change; edits current preset, '
-			+'or creates new preset if used with your "real" appearance.');
-			command.message('"surgeon new race" - Does the same as "surgeon race"; creates new preset.');
-			command.message('"surgeon new gender" - Does the same as "surgeon gender"; creates new preset.');
-			command.message('"surgeon new face" - Does the same as "surgeon face"; creates new preset.');
-			command.message('"surgeon monster [race] [gender]" - Upon relog, game tries to treat your '
-			+'real templateId as specified race and gender if applicable; '
+			command.message('<font color="#4682b4">"surgeon load [x]"</font> - load your saved preset slot x, 0 - revert to original.');
+			command.message('<font color="#4682b4">"surgeon race"</font> - Emulates a race change. <font color="#fc7676">[1]</font>');
+			command.message('<font color="#4682b4">"surgeon gender"</font> - Emulates a gender change. <font color="#fc7676">[1]</font>');
+			command.message('<font color="#4682b4">"surgeon face"</font> - Emulates an appearance change; edits current preset, '
+			+'or creates new preset if used with your original appearance.');
+			command.message('<font color="#4682b4">"surgeon new race"</font> - Does the same as "surgeon race"; creates new preset.');
+			command.message('<font color="#4682b4">"surgeon new gender"</font> - Does the same as "surgeon gender"; creates new preset.');
+			command.message('<font color="#4682b4">"surgeon new face"</font> - Does the same as "surgeon face"; creates new preset.');
+			command.message('<font color="#4682b4">"surgeon monster [race] [gender]"</font> - Upon relog, game tries to treat your '
+			+'original templateId as specified race and gender if applicable; '
 			+'Allows your character to wear costumes of current templateId. <font color="#fc7676">[2]</font>');
-			command.message('"surgeon monster off" - Disable monster mode.');
-			command.message('<font color="#fc7676">[1] Will cause desyncs unless racial skill animation is almost identical. ' 
-			+'Race/Gender inappropriate to the class will cause T-poses, desyncs and unexpected glitches.</font>');
+			command.message('<font color="#4682b4">"surgeon monster off"</font> - Disable monster mode.');
+			command.message('<font color="#fc7676">[1] Will cause desyncs unless racial skill animation is almost identical. '
+			+'Race/Gender inappropriate to the original class will cause T-poses, desyncs and unexpected glitches. </font>');
 			command.message('<font color="#fc7676">[2] Use with Arborean Apparel\'s race/gender(soon) change.</font>');
 		}
 	});
