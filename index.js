@@ -8,6 +8,7 @@ module.exports = function Surgeon(dispatch) {
 		game = GameState(dispatch);
 
 	let userinfo = { real: {}, fake: {}, costumes: {} },
+		OnLogin = false,
 		inSurgeonRoom = false,
 		inLobby = false,
 		leaveRoom = false,
@@ -50,6 +51,7 @@ module.exports = function Surgeon(dispatch) {
 	// ############# //
 
 	dispatch.hook('S_LOGIN', 10, { order: 999 }, event => {
+		OnLogin = false;
 		inLobby = false;
 		inSurgeonRoom = false;
 		newpreset = false;
@@ -66,18 +68,22 @@ module.exports = function Surgeon(dispatch) {
 			shape: event.shape
 		});
 		Object.assign(userinfo.fake, userinfo.real);
-		if (customApp.characters[game.me.name]) command.message('Using preset '+customApp.characters[game.me.name]);
 		if (customApp.monsters[game.me.name]) {
 			let mon = customApp.monsters[game.me.name]
 			event.templateId = fixModel(mon.race, userinfo.real.race, mon.gender, userinfo.real.class);
-			command.message('Monster mode enabled. (race '+mon.race+' gender '+mon.gender+')');
 			return true;
 		}
 	});
 	
 	dispatch.hook('S_SPAWN_ME', 3, event => {
-		if (game.me.is(event.gameId) && customApp.characters[game.me.name]) {
-			EmulateExternalChange();
+		if (game.me.is(event.gameId)) {
+			if (customApp.characters[game.me.name]) EmulateExternalChange();
+			if (!OnLogin) {
+				OnLogin = true;
+				if (customApp.characters[game.me.name]) command.message('Using preset '+customApp.characters[game.me.name]);
+				if (customApp.monsters[game.me.name]) command.message('Monster mode enabled. (race '+customApp.monsters[game.me.name].race
+				+' gender: '+customApp.monsters[game.me.name].gender+')');
+			}
 		}
  	});
 
